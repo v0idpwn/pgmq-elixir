@@ -56,7 +56,7 @@ defmodule Pgmq do
               count :: integer()
             ) :: [Pgmq.Message.t()]
       def read_messages(queue, visibility_timeout_seconds, count) do
-        Pgmq.read_messages(unquote(repo), queue, visibility_timeout_seconds)
+        Pgmq.read_messages(unquote(repo), queue, visibility_timeout_seconds, count)
       end
 
       @spec read_messages_with_poll(
@@ -68,12 +68,12 @@ defmodule Pgmq do
             ) :: [Pgmq.Message.t()]
       def read_messages_with_poll(
             queue,
-            visibility_timeout_seconds,
             count,
+            visibility_timeout_seconds,
             max_poll_seconds \\ @default_max_poll_seconds,
             poll_interval_ms \\ @default_poll_interval_ms
           ) do
-        Pgmq.read_messages(
+        Pgmq.read_messages_with_poll(
           unquote(repo),
           queue,
           visibility_timeout_seconds,
@@ -152,15 +152,16 @@ defmodule Pgmq do
   @spec read_messages_with_poll(
           repo,
           queue,
-          count :: integer,
           visibility_timeout_seconds :: integer,
-          count :: integer
+          count :: integer,
+          max_poll_seconds :: integer,
+          poll_interval_ms :: integer
         ) :: [Message.t()]
   def read_messages_with_poll(
         repo,
         queue,
-        count,
         visibility_timeout_seconds,
+        count,
         max_poll_seconds \\ @default_max_poll_seconds,
         poll_interval_ms \\ @default_poll_interval_ms
       ) do
