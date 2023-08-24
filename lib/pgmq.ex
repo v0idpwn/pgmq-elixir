@@ -105,30 +105,48 @@ defmodule Pgmq do
 
   @spec create_queue(repo, queue) :: :ok | {:error, atom}
   def create_queue(repo, queue) do
-    repo.query!("SELECT FROM pgmq_create($1)", [queue])
+    %Postgrex.Result{num_rows: 1} = repo.query!("SELECT FROM pgmq_create($1)", [queue])
+    :ok
   end
 
   @spec drop_queue(repo, queue) :: :ok | {:error, atom}
   def drop_queue(repo, queue) do
-    repo.query!("SELECT FROM pgmq_drop($1)", [queue])
+    %Postgrex.Result{num_rows: 1} = repo.query!("SELECT FROM pgmq_drop($1)", [queue])
+    :ok
   end
 
   @spec send_message(repo, queue, encoded_message :: binary) ::
-          {:ok, Message.t()} | {:error, atom}
+          {:ok, Message.t()} | {:error, term}
   def send_message(repo, queue, encoded_message) do
-    repo.query!("SELECT FROM pgmq_send($1, $2)", [queue, encoded_message])
+    case repo.query!("SELECT * FROM pgmq_send($1, $2)", [queue, encoded_message]) do
+      %Postgrex.Result{rows: [[message_id]]} -> {:ok, message_id}
+      result -> {:error, {:sending_error, result}}
+    end
   end
 
   @spec read_message(repo, queue, visibility_timeout_seconds :: integer) ::
           {:ok, Message.t()} | {:error, atom}
   def read_message(repo, queue, visibility_timeout_seconds) do
-    repo.query!("SELECT FROM pgmq_read($1, $2, 1)", [queue, visibility_timeout_seconds])
+    %Postgrex.Result{rows: rows} =
+      repo.query!("SELECT * FROM pgmq_read($1, $2, 1)", [queue, visibility_timeout_seconds])
+
+    case rows do
+      [] -> nil
+      [row] -> Message.from_row(row)
+    end
   end
 
   @spec read_messages(repo, queue, visibility_timeout_seconds :: integer, count :: integer) ::
           {:ok, [Message.t()]} | {:error, atom}
   def read_messages(repo, queue, visibility_timeout_seconds, count) do
-    repo.query!("SELECT FROM pgmq_read($1, $2, $3)", [queue, visibility_timeout_seconds, count])
+    %Postgrex.Result{rows: rows} =
+      repo.query!("SELECT * FROM pgmq_read($1, $2, $3)", [
+        queue,
+        visibility_timeout_seconds,
+        count
+      ])
+
+    Enum.map(rows, &Message.from_row/1)
   end
 
   @spec read_messages_with_poll(
@@ -146,13 +164,16 @@ defmodule Pgmq do
         max_poll_seconds \\ @default_max_poll_seconds,
         poll_interval_ms \\ @default_poll_interval_ms
       ) do
-    repo.query!("SELECT FROM pgmq_read_with_poll($1, $2, $3, $4, $5)", [
-      queue,
-      visibility_timeout_seconds,
-      count,
-      max_poll_seconds,
-      poll_interval_ms
-    ])
+    %Postgrex.Result{rows: rows} =
+      repo.query!("SELECT * FROM pgmq_read_with_poll($1, $2, $3, $4, $5)", [
+        queue,
+        visibility_timeout_seconds,
+        count,
+        max_poll_seconds,
+        poll_interval_ms
+      ])
+
+    Enum.map(rows, &Message.from_row/1)
   end
 
   @spec archive_message(repo, queue, (message_id :: integer) | (message :: Message.t())) ::
@@ -162,7 +183,10 @@ defmodule Pgmq do
   end
 
   def archive_message(repo, queue, message_id) do
-    repo.query!("SELECT FROM pgmq_archive($1, $2)", [queue, message_id])
+    %Postgrex.Result{rows: [[true]]} =
+      repo.query!("SELECT * FROM pgmq_archive($1, $2)", [queue, message_id])
+
+    :ok
   end
 
   @spec delete_messages(repo, queue, [message_id :: integer] | [Message.t()]) ::
@@ -173,10 +197,16 @@ defmodule Pgmq do
   end
 
   def delete_messages(repo, queue, [message_id]) do
-    repo.query!("SELECT FROM pgmq_delete($1::text, $2::bigint)", [queue, message_id])
+    %Postgrex.Result{rows: [[true]]} =
+      repo.query!("SELECT * FROM pgmq_delete($1::text, $2::bigint)", [queue, message_id])
+
+    :ok
   end
 
   def delete_messages(repo, queue, message_ids) do
-    repo.query!("SELECT FROM pgmq_delete($1::text, $2::bigint[])", [queue, message_ids])
+    %Postgrex.Result{rows: [[true]]} =
+      repo.query!("SELECT * FROM pgmq_delete($1::text, $2::bigint[])", [queue, message_ids])
+
+    :ok
   end
 end
