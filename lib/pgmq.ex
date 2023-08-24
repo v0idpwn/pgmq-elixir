@@ -124,8 +124,7 @@ defmodule Pgmq do
     end
   end
 
-  @spec read_message(repo, queue, visibility_timeout_seconds :: integer) ::
-          {:ok, Message.t()} | {:error, atom}
+  @spec read_message(repo, queue, visibility_timeout_seconds :: integer) :: Message.t() | nil
   def read_message(repo, queue, visibility_timeout_seconds) do
     %Postgrex.Result{rows: rows} =
       repo.query!("SELECT * FROM pgmq_read($1, $2, 1)", [queue, visibility_timeout_seconds])
@@ -136,8 +135,9 @@ defmodule Pgmq do
     end
   end
 
-  @spec read_messages(repo, queue, visibility_timeout_seconds :: integer, count :: integer) ::
-          {:ok, [Message.t()]} | {:error, atom}
+  @spec read_messages(repo, queue, visibility_timeout_seconds :: integer, count :: integer) :: [
+          Message.t()
+        ]
   def read_messages(repo, queue, visibility_timeout_seconds, count) do
     %Postgrex.Result{rows: rows} =
       repo.query!("SELECT * FROM pgmq_read($1, $2, $3)", [
@@ -155,7 +155,7 @@ defmodule Pgmq do
           count :: integer,
           visibility_timeout_seconds :: integer,
           count :: integer
-        ) :: {:ok, [Message.t()]} | {:error, atom}
+        ) :: [Message.t()]
   def read_messages_with_poll(
         repo,
         queue,
@@ -176,8 +176,7 @@ defmodule Pgmq do
     Enum.map(rows, &Message.from_row/1)
   end
 
-  @spec archive_message(repo, queue, (message_id :: integer) | (message :: Message.t())) ::
-          :ok | {:error, atom}
+  @spec archive_message(repo, queue, (message_id :: integer) | (message :: Message.t())) :: :ok
   def archive_message(repo, queue, %Message{id: message_id}) do
     archive_message(repo, queue, message_id)
   end
@@ -189,8 +188,7 @@ defmodule Pgmq do
     :ok
   end
 
-  @spec delete_messages(repo, queue, [message_id :: integer] | [Message.t()]) ::
-          :ok | {:error, atom}
+  @spec delete_messages(repo, queue, [message_id :: integer] | [Message.t()]) :: :ok
   def delete_messages(repo, queue, [%Message{} | _] = messages) do
     message_ids = Enum.map(messages, fn m -> m.id end)
     delete_messages(repo, queue, message_ids)
