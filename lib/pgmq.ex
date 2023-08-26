@@ -2,9 +2,11 @@ defmodule Pgmq do
   @moduledoc """
   Thin wrapper over the pgmq extension
 
-  This module can be `use`d for the convenience of having a standardized repo
+  Provides APIs for sending, reading, archiving and deleting messages.
 
-  Example usage:
+  ### Use-macros
+  You can `use Pgmq` for the convenience of having a standardized repo and less
+  convoluted function calls. By defining:
   ```
     # lib/my_app/pgmq.ex
     defmodule MyApp.Pgmq do
@@ -12,15 +14,16 @@ defmodule Pgmq do
     end
   ```
 
-  would allow you to call `MyApp.Pgmq.send_message("myqueue", "hello")`
-
-  Alternatively, one can call the functions from this module directly. For example,
-  `Pgmq.send_message(MyApp.Repo, "myqueue", "hello"))`
+  You can then call `MyApp.Pgmq.send_message("myqueue", "hello")`, without passing
+  in the `MyApp.Repo`
   """
 
   alias Pgmq.Message
 
+  @typedoc "Queue name"
   @type queue :: String.t()
+
+  @typedoc "An Ecto repository"
   @type repo :: Ecto.Repo.t()
 
   @default_max_poll_seconds 5
@@ -78,33 +81,44 @@ defmodule Pgmq do
         )
       end
 
-      @spec archive_message(Pgmq.queue(), message :: Pgmq.Message.t() | message_id :: integer()) ::
-              [Pgmq.Message.t()]
+      @spec archive_messages(Pgmq.queue(), message :: [Pgmq.Message.t()] | [integer()]) :: :ok
       def archive_message(queue, message) do
         Pgmq.archive_message(unquote(repo), queue, message)
       end
 
-      @spec delete_messages(Pgmq.queue(), messages :: [Pgmq.Message.t()] | [integer()]) :: [
-              Pgmq.Message.t()
-            ]
+      @spec delete_messages(Pgmq.queue(), messages :: [Pgmq.Message.t()] | [integer()]) :: :ok
       def delete_messages(queue, messages) do
         Pgmq.delete_messages(unquote(repo), queue, message)
       end
     end
   end
 
+  @doc """
+  Creates a queue in the database
+
+  Notice that the queue name must:
+  - have less than 63 characters
+  - start with a letter
+  - have only letters, numbers, and `_`
+  """
   @spec create_queue(repo, queue) :: :ok | {:error, atom}
   def create_queue(repo, queue) do
     %Postgrex.Result{num_rows: 1} = repo.query!("SELECT FROM pgmq_create($1)", [queue])
     :ok
   end
 
+  @doc """
+  Deletes a queue from the database
+  """
   @spec drop_queue(repo, queue) :: :ok | {:error, atom}
   def drop_queue(repo, queue) do
     %Postgrex.Result{num_rows: 1} = repo.query!("SELECT FROM pgmq_drop($1)", [queue])
     :ok
   end
 
+  @doc """
+  Sends one message to a queue
+  """
   @spec send_message(repo, queue, encoded_message :: binary) ::
           {:ok, Message.t()} | {:error, term}
   def send_message(repo, queue, encoded_message) do
@@ -114,6 +128,14 @@ defmodule Pgmq do
     end
   end
 
+  @doc """
+  Reads one message from a queue
+
+  Returns immediately. If there are no messages in the queue, returns `nil`.
+
+  Messages read through this function are guaranteed not to be read by
+  other calls for `visibility_timeout_seconds`.
+  """
   @spec read_message(repo, queue, visibility_timeout_seconds :: integer) :: Message.t() | nil
   def read_message(repo, queue, visibility_timeout_seconds) do
     %Postgrex.Result{rows: rows} =
@@ -125,6 +147,12 @@ defmodule Pgmq do
     end
   end
 
+  @doc """
+  Reads a batch of messages from a queue
+
+  Messages read through this function are guaranteed not to be read by
+  other calls for `visibility_timeout_seconds`.
+  """
   @spec read_messages(repo, queue, visibility_timeout_seconds :: integer, count :: integer) :: [
           Message.t()
         ]
@@ -139,6 +167,21 @@ defmodule Pgmq do
     Enum.map(rows, &Message.from_row/1)
   end
 
+  @doc """
+  Reads a batch of messages from a queue, but waits if no messages are available
+
+  When there are messages available in the queue, returns immediately.
+  Otherwise, blocks until at least one message is available, or `max_poll_seconds`
+  is reached. The `poll_interval_ms` option dictates the polling interval
+  database-side, and can be tuned for lower latency or less database load.
+
+  Notice that this function may put significant burden on the connection pool,
+  as it may hold the connection for several seconds if there's no activity in
+  the queue.
+
+  Messages read through this function are guaranteed not to be read by
+  other calls for `visibility_timeout_seconds`.
+  """
   @spec read_messages_with_poll(
           repo,
           queue,
@@ -167,18 +210,38 @@ defmodule Pgmq do
     Enum.map(rows, &Message.from_row/1)
   end
 
-  @spec archive_message(repo, queue, (message_id :: integer) | (message :: Message.t())) :: :ok
-  def archive_message(repo, queue, %Message{id: message_id}) do
-    archive_message(repo, queue, message_id)
+  @doc """
+  Archives a message, removing it from the queue and putting it into the archive
+
+  This function can receive a list of either `Message.t()` or message ids. Mixed
+  lists aren't allowed.
+  """
+  @spec archive_messages(repo, queue, (message_id :: integer) | (message :: Message.t())) :: :ok
+  def archive_messages(repo, queue, [%Message{} | _] = messages) do
+    message_ids = Enum.map(messages, fn m -> m.id end)
+    archive_messages(repo, queue, message_ids)
   end
 
-  def archive_message(repo, queue, message_id) do
+  def archive_messages(repo, queue, [message_id]) do
     %Postgrex.Result{rows: [[true]]} =
-      repo.query!("SELECT * FROM pgmq_archive($1, $2)", [queue, message_id])
+      repo.query!("SELECT * FROM pgmq_archive($1, $2::bigint)", [queue, message_id])
 
     :ok
   end
 
+  def archive_messages(repo, queue, message_ids) do
+    %Postgrex.Result{rows: [[true]]} =
+      repo.query!("SELECT * FROM pgmq_archive($1, $2::bigint[])", [queue, message_ids])
+
+    :ok
+  end
+
+  @doc """
+  Deletes a batch of messages, removing them from the queue
+
+  This function can receive a list of either `Message.t()` or message ids. Mixed
+  lists aren't allowed.
+  """
   @spec delete_messages(repo, queue, [message_id :: integer] | [Message.t()]) :: :ok
   def delete_messages(repo, queue, [%Message{} | _] = messages) do
     message_ids = Enum.map(messages, fn m -> m.id end)

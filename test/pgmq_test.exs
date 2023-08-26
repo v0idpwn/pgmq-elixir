@@ -44,10 +44,10 @@ defmodule PgmqTest do
     assert {:ok, m1} = Pgmq.send_message(TestRepo, queue_name, "1")
     assert {:ok, _m2} = Pgmq.send_message(TestRepo, queue_name, "2")
 
-    assert :ok = Pgmq.archive_message(TestRepo, queue_name, m1)
+    assert :ok = Pgmq.archive_messages(TestRepo, queue_name, [m1])
     assert [%Message{} = m2_full] = Pgmq.read_messages(TestRepo, queue_name, 0, 2)
 
-    assert :ok = Pgmq.archive_message(TestRepo, queue_name, m2_full)
+    assert :ok = Pgmq.archive_messages(TestRepo, queue_name, [m2_full])
     assert [] = Pgmq.read_messages(TestRepo, queue_name, 0, 2)
   end
 

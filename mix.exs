@@ -1,7 +1,7 @@
 defmodule Pgmq.MixProject do
   use Mix.Project
 
-  @version "~> 0.1.0"
+  @version "0.1.0"
 
   def project do
     [
@@ -11,7 +11,7 @@ defmodule Pgmq.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env()),
-      description: description()
+      description: description(),
       package: package(),
       name: "Pgmq",
       docs: docs(),
@@ -29,17 +29,18 @@ defmodule Pgmq.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:jason, "~> 1.0"},
       {:ecto_sql, "~> 3.10"},
       {:postgrex, ">= 0.0.0"},
       {:dialyxir, "~> 1.0", only: :dev},
-      {:ex_doc, "~> 1.0", only: :dev}
+      {:ex_doc, "~> 0.25", only: :dev}
     ]
   end
 
   defp docs do
     [
       main: "Pgmq",
-      source_ref: "v#{@version}",
+      source_ref: "v#{@version}"
     ]
   end
 
