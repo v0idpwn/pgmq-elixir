@@ -3,20 +3,19 @@ defmodule Pgmq do
   Thin wrapper over the pgmq extension
 
   This module can be `use`d for the convenience of having a standardized repo
-  and encoder for all messages.
 
   Example usage:
   ```
     # lib/my_app/pgmq.ex
     defmodule MyApp.Pgmq do
-      use Pgmq, repo: MyApp.Repo, encoder: Jason
+      use Pgmq, repo: MyApp.Repo
     end
   ```
 
-  would allow you to call `MyApp.Pgmq.send_message("myqueue", %{"hi" => "world!"})`
+  would allow you to call `MyApp.Pgmq.send_message("myqueue", "hello")`
 
   Alternatively, one can call the functions from this module directly. For example,
-  `Pgmq.send_message(MyApp.Repo, "myqueue", Jason.encode!(%{"hi" => "world!"}))`
+  `Pgmq.send_message(MyApp.Repo, "myqueue", "hello"))`
   """
 
   alias Pgmq.Message
@@ -29,7 +28,6 @@ defmodule Pgmq do
 
   defmacro __using__(opts) do
     repo = Keyword.fetch!(opts, :repo)
-    encoder = Keyword.fetch!(opts, :encoder)
 
     quote do
       @spec create_queue(Pgmq.queue()) :: :ok
@@ -40,9 +38,7 @@ defmodule Pgmq do
 
       @spec send_message(Pgmq.queue(), term()) :: {:ok, integer()} | {:error, term()}
       def send_message(queue, message) do
-        with {:ok, encoded_message} <- unquote(encoder).encode(message) do
-          Pgmq.send_message(unquote(repo), queue, encoded_message)
-        end
+        Pgmq.send_message(unquote(repo), queue, encoded_message)
       end
 
       @spec read_message(Pgmq.queue(), integer()) :: Pgmq.Message.t() | nil
@@ -93,12 +89,6 @@ defmodule Pgmq do
             ]
       def delete_messages(queue, messages) do
         Pgmq.delete_messages(unquote(repo), queue, message)
-      end
-
-      # We can assume it was properly encoded as pgmq doesn't allow poorly encoded
-      # messages to be published
-      defp decode_message_content(message) do
-        %Message{message | body: unquote(encoder).decode!(message.body)}
       end
     end
   end
