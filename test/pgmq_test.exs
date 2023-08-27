@@ -19,6 +19,23 @@ defmodule PgmqTest do
     assert :ok = Pgmq.delete_messages(TestRepo, "regular_flow_queue", [message])
   end
 
+  test "list queues" do
+    # This is a trick to reset the tables before running this test, as it
+    # can fail due to data from others (we aren't using sandbox)
+    TestRepo.query!("DROP EXTENSION pgmq")
+    TestRepo.query!("CREATE EXTENSION pgmq")
+
+    # Actual test
+    q1 = "list_queues_q1"
+    q2 = "list_queues_q2"
+
+    assert [] = Pgmq.list_queues(TestRepo)
+    Pgmq.create_queue(TestRepo, q1)
+    assert [%{queue_name: ^q1}] = Pgmq.list_queues(TestRepo)
+    Pgmq.create_queue(TestRepo, q2)
+    assert [%{queue_name: ^q1}, %{queue_name: ^q2}] = Pgmq.list_queues(TestRepo)
+  end
+
   test "batches" do
     queue_name = "batches_queue"
     assert :ok = Pgmq.create_queue(TestRepo, queue_name)
@@ -79,5 +96,24 @@ defmodule PgmqTest do
     refute_receive {:got_result, _}, 2000
     send(inserter_pid, :insert)
     assert_receive {:got_result, %Message{}}, 1000
+  end
+
+  test "pop" do
+    queue_name = "pop_queue"
+    assert :ok = Pgmq.create_queue(TestRepo, queue_name)
+    assert {:ok, _} = Pgmq.send_message(TestRepo, queue_name, "1")
+
+    assert %{body: "1"} = Pgmq.pop_message(TestRepo, queue_name)
+    assert is_nil(Pgmq.pop_message(TestRepo, queue_name))
+  end
+
+  test "set message vt" do
+    queue_name = "set_vt_queue"
+    assert :ok = Pgmq.create_queue(TestRepo, queue_name)
+    assert {:ok, m1} = Pgmq.send_message(TestRepo, queue_name, "1")
+    assert Pgmq.set_message_vt(TestRepo, queue_name, m1, 50)
+    assert is_nil(Pgmq.read_message(TestRepo, queue_name, 10))
+    assert Pgmq.set_message_vt(TestRepo, queue_name, m1, 0)
+    assert %Message{} = Pgmq.read_message(TestRepo, queue_name, 10)
   end
 end

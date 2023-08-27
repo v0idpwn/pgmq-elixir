@@ -87,6 +87,34 @@ defmodule Pgmq do
       def delete_messages(queue, messages) do
         Pgmq.delete_messages(unquote(repo), queue, message)
       end
+
+      @doc """
+      Returns a list of queue names
+      """
+      @spec list_queues() :: [%{queue_name: String.t(), created_at: DateTime.t()}]
+      def list_queues() do
+        Pgmq.list_queues(unquote(repo))
+      end
+
+      @doc """
+      Sets the visibility timeout of a message for X seconds from now
+
+      Accepts either a message or a message id.
+      """
+      @spec set_message_vt(queue, Message.t() | integer()) :: :ok
+      def set_message_vt(queue, message, vt) do
+        Pgmq.set_message_vt(unquote(repo), queue, message, vt)
+      end
+
+      @doc """
+      Reads a message and instantly deletes it from the queue
+
+      If there are no messages in the queue, returns `nil`.
+      """
+      @spec pop_message(queue) :: Message.t() | nil
+      def pop_message(queue) do
+        Pgmq.pop_message(unquote(repo), queue)
+      end
     end
   end
 
@@ -264,5 +292,50 @@ defmodule Pgmq do
       repo.query!("SELECT * FROM pgmq_delete($1::text, $2::bigint[])", [queue, message_ids])
 
     :ok
+  end
+
+  @doc """
+  Returns a list of queue names
+  """
+  @spec list_queues(repo) :: [%{queue_name: String.t(), created_at: DateTime.t()}]
+  def list_queues(repo) do
+    %Postgrex.Result{rows: queues} =
+      repo.query!("SELECT * FROM pgmq_list_queues()", [])
+
+    Enum.map(queues, fn [queue_name, created_at] ->
+      %{queue_name: queue_name, created_at: created_at}
+    end)
+  end
+
+  @doc """
+  Sets the visibility timeout of a message for X seconds from now
+  """
+  @spec set_message_vt(repo, queue, Message.t() | integer(), visibility_timeout :: integer()) ::
+          :ok
+  def set_message_vt(repo, queue, %Message{id: message_id}, visibility_timeout) do
+    set_message_vt(repo, queue, message_id, visibility_timeout)
+  end
+
+  def set_message_vt(repo, queue, message_id, visibility_timeout) do
+    %Postgrex.Result{rows: [_]} =
+      repo.query!("SELECT * FROM pgmq_set_vt($1, $2, $3)", [queue, message_id, visibility_timeout])
+
+    :ok
+  end
+
+  @doc """
+  Reads a message and instantly deletes it from the queue
+
+  If there are no messages in the queue, returns `nil`.
+  """
+  @spec pop_message(repo, queue) :: Message.t() | nil
+  def pop_message(repo, queue) do
+    case repo.query!("SELECT * FROM pgmq_pop($1)", [queue]) do
+      %Postgrex.Result{rows: [columns]} ->
+        Message.from_row(columns)
+
+      %Postgrex.Result{rows: []} ->
+        nil
+    end
   end
 end
