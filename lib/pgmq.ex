@@ -62,22 +62,19 @@ defmodule Pgmq do
               Pgmq.queue(),
               visibility_timeout_seconds :: integer(),
               count :: integer(),
-              max_poll_seconds :: integer(),
-              poll_interval_ms :: integer()
+              opts :: Keyword.t()
             ) :: [Pgmq.Message.t()]
       def read_messages_with_poll(
             queue,
             count,
             visibility_timeout_seconds,
-            max_poll_seconds \\ @default_max_poll_seconds,
-            poll_interval_ms \\ @default_poll_interval_ms
+            opts \\ []
           ) do
         Pgmq.read_messages_with_poll(
           unquote(repo),
           queue,
           visibility_timeout_seconds,
-          max_poll_seconds,
-          poll_interval_ms
+          opts
         )
       end
 
@@ -170,10 +167,15 @@ defmodule Pgmq do
   @doc """
   Reads a batch of messages from a queue, but waits if no messages are available
 
+  Accepts two options:
+  - `:max_poll_seconds`: the maximum duration of the poll. Defaults to 5.
+  - `:poll_interval_ms`: dictates how often the poll is made database
+  side. Defaults to 250. Can be tuned for lower latency or less database load,
+  depending on your needs.
+
   When there are messages available in the queue, returns immediately.
   Otherwise, blocks until at least one message is available, or `max_poll_seconds`
-  is reached. The `poll_interval_ms` option dictates the polling interval
-  database-side, and can be tuned for lower latency or less database load.
+  is reached.
 
   Notice that this function may put significant burden on the connection pool,
   as it may hold the connection for several seconds if there's no activity in
@@ -187,17 +189,18 @@ defmodule Pgmq do
           queue,
           visibility_timeout_seconds :: integer,
           count :: integer,
-          max_poll_seconds :: integer,
-          poll_interval_ms :: integer
+          opts :: Keyword.t()
         ) :: [Message.t()]
   def read_messages_with_poll(
         repo,
         queue,
         visibility_timeout_seconds,
         count,
-        max_poll_seconds \\ @default_max_poll_seconds,
-        poll_interval_ms \\ @default_poll_interval_ms
+        opts \\ []
       ) do
+    max_poll_seconds = Keyword.get(opts, :max_poll_seconds, @default_max_poll_seconds)
+    poll_interval_ms = Keyword.get(opts, :poll_interval_ms, @default_poll_interval_ms)
+
     %Postgrex.Result{rows: rows} =
       repo.query!("SELECT * FROM pgmq_read_with_poll($1, $2, $3, $4, $5)", [
         queue,
