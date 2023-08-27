@@ -211,7 +211,8 @@ defmodule Pgmq do
   end
 
   @doc """
-  Archives a message, removing it from the queue and putting it into the archive
+  Archives list of messages, removing them from the queue and putting
+  them into the archive
 
   This function can receive a list of either `Message.t()` or message ids. Mixed
   lists aren't allowed.
