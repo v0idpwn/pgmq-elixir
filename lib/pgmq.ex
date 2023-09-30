@@ -78,9 +78,9 @@ defmodule Pgmq do
         )
       end
 
-      @spec archive_messages(Pgmq.queue(), message :: [Pgmq.Message.t()] | [integer()]) :: :ok
-      def archive_message(queue, message) do
-        Pgmq.archive_message(unquote(repo), queue, message)
+      @spec archive_messages(Pgmq.queue(), messages :: [Pgmq.Message.t()] | [integer()]) :: :ok
+      def archive_messages(queue, messages) do
+        Pgmq.archive_messages(unquote(repo), queue, messages)
       end
 
       @spec delete_messages(Pgmq.queue(), messages :: [Pgmq.Message.t()] | [integer()]) :: :ok
@@ -128,7 +128,7 @@ defmodule Pgmq do
   """
   @spec create_queue(repo, queue) :: :ok | {:error, atom}
   def create_queue(repo, queue) do
-    %Postgrex.Result{num_rows: 1} = repo.query!("SELECT FROM pgmq_create($1)", [queue])
+    %Postgrex.Result{num_rows: 1} = repo.query!("SELECT FROM pgmq.create($1)", [queue])
     :ok
   end
 
@@ -137,7 +137,7 @@ defmodule Pgmq do
   """
   @spec drop_queue(repo, queue) :: :ok | {:error, atom}
   def drop_queue(repo, queue) do
-    %Postgrex.Result{num_rows: 1} = repo.query!("SELECT FROM pgmq_drop($1)", [queue])
+    %Postgrex.Result{num_rows: 1} = repo.query!("SELECT FROM pgmq.drop($1)", [queue])
     :ok
   end
 
@@ -147,7 +147,7 @@ defmodule Pgmq do
   @spec send_message(repo, queue, encoded_message :: binary) ::
           {:ok, Message.t()} | {:error, term}
   def send_message(repo, queue, encoded_message) do
-    case repo.query!("SELECT * FROM pgmq_send($1, $2)", [queue, encoded_message]) do
+    case repo.query!("SELECT * FROM pgmq.send($1, $2)", [queue, encoded_message]) do
       %Postgrex.Result{rows: [[message_id]]} -> {:ok, message_id}
       result -> {:error, {:sending_error, result}}
     end
@@ -164,7 +164,7 @@ defmodule Pgmq do
   @spec read_message(repo, queue, visibility_timeout_seconds :: integer) :: Message.t() | nil
   def read_message(repo, queue, visibility_timeout_seconds) do
     %Postgrex.Result{rows: rows} =
-      repo.query!("SELECT * FROM pgmq_read($1, $2, 1)", [queue, visibility_timeout_seconds])
+      repo.query!("SELECT * FROM pgmq.read($1, $2, 1)", [queue, visibility_timeout_seconds])
 
     case rows do
       [] -> nil
@@ -183,7 +183,7 @@ defmodule Pgmq do
         ]
   def read_messages(repo, queue, visibility_timeout_seconds, count) do
     %Postgrex.Result{rows: rows} =
-      repo.query!("SELECT * FROM pgmq_read($1, $2, $3)", [
+      repo.query!("SELECT * FROM pgmq.read($1, $2, $3)", [
         queue,
         visibility_timeout_seconds,
         count
@@ -230,7 +230,7 @@ defmodule Pgmq do
     poll_interval_ms = Keyword.get(opts, :poll_interval_ms, @default_poll_interval_ms)
 
     %Postgrex.Result{rows: rows} =
-      repo.query!("SELECT * FROM pgmq_read_with_poll($1, $2, $3, $4, $5)", [
+      repo.query!("SELECT * FROM pgmq.read_with_poll($1, $2, $3, $4, $5)", [
         queue,
         visibility_timeout_seconds,
         count,
@@ -248,7 +248,7 @@ defmodule Pgmq do
   This function can receive a list of either `Message.t()` or message ids. Mixed
   lists aren't allowed.
   """
-  @spec archive_messages(repo, queue, (message_id :: integer) | (message :: Message.t())) :: :ok
+  @spec archive_messages(repo, queue, [message_id :: integer] | [message :: Message.t()]) :: :ok
   def archive_messages(repo, queue, [%Message{} | _] = messages) do
     message_ids = Enum.map(messages, fn m -> m.id end)
     archive_messages(repo, queue, message_ids)
@@ -256,14 +256,14 @@ defmodule Pgmq do
 
   def archive_messages(repo, queue, [message_id]) do
     %Postgrex.Result{rows: [[true]]} =
-      repo.query!("SELECT * FROM pgmq_archive($1, $2::bigint)", [queue, message_id])
+      repo.query!("SELECT * FROM pgmq.archive($1, $2::bigint)", [queue, message_id])
 
     :ok
   end
 
   def archive_messages(repo, queue, message_ids) do
     %Postgrex.Result{rows: [[true]]} =
-      repo.query!("SELECT * FROM pgmq_archive($1, $2::bigint[])", [queue, message_ids])
+      repo.query!("SELECT * FROM pgmq.archive($1, $2::bigint[])", [queue, message_ids])
 
     :ok
   end
@@ -282,14 +282,14 @@ defmodule Pgmq do
 
   def delete_messages(repo, queue, [message_id]) do
     %Postgrex.Result{rows: [[true]]} =
-      repo.query!("SELECT * FROM pgmq_delete($1::text, $2::bigint)", [queue, message_id])
+      repo.query!("SELECT * FROM pgmq.delete($1::text, $2::bigint)", [queue, message_id])
 
     :ok
   end
 
   def delete_messages(repo, queue, message_ids) do
     %Postgrex.Result{rows: [[true]]} =
-      repo.query!("SELECT * FROM pgmq_delete($1::text, $2::bigint[])", [queue, message_ids])
+      repo.query!("SELECT * FROM pgmq.delete($1::text, $2::bigint[])", [queue, message_ids])
 
     :ok
   end
@@ -297,13 +297,24 @@ defmodule Pgmq do
   @doc """
   Returns a list of queue names
   """
-  @spec list_queues(repo) :: [%{queue_name: String.t(), created_at: DateTime.t()}]
+  @spec list_queues(repo) :: [
+          %{
+            queue_name: String.t(),
+            is_partitioned: boolean(),
+            is_unlogged: boolean(),
+            created_at: DateTime.t()
+          }
+        ]
   def list_queues(repo) do
-    %Postgrex.Result{rows: queues} =
-      repo.query!("SELECT * FROM pgmq_list_queues()", [])
+    %Postgrex.Result{rows: queues} = repo.query!("SELECT * FROM pgmq.list_queues()", [])
 
-    Enum.map(queues, fn [queue_name, created_at] ->
-      %{queue_name: queue_name, created_at: created_at}
+    Enum.map(queues, fn [queue_name, is_partitioned, is_unlogged, created_at] ->
+      %{
+        queue_name: queue_name,
+        is_partitioned: is_partitioned,
+        is_unlogged: is_unlogged,
+        created_at: created_at
+      }
     end)
   end
 
@@ -318,7 +329,7 @@ defmodule Pgmq do
 
   def set_message_vt(repo, queue, message_id, visibility_timeout) do
     %Postgrex.Result{rows: [_]} =
-      repo.query!("SELECT * FROM pgmq_set_vt($1, $2, $3)", [queue, message_id, visibility_timeout])
+      repo.query!("SELECT * FROM pgmq.set_vt($1, $2, $3)", [queue, message_id, visibility_timeout])
 
     :ok
   end
@@ -330,7 +341,7 @@ defmodule Pgmq do
   """
   @spec pop_message(repo, queue) :: Message.t() | nil
   def pop_message(repo, queue) do
-    case repo.query!("SELECT * FROM pgmq_pop($1)", [queue]) do
+    case repo.query!("SELECT * FROM pgmq.pop($1)", [queue]) do
       %Postgrex.Result{rows: [columns]} ->
         Message.from_row(columns)
 
