@@ -33,8 +33,8 @@ defmodule Pgmq do
     repo = Keyword.fetch!(opts, :repo)
 
     quote do
-      @spec create_queue(Pgmq.queue()) :: :ok
-      def create_queue(queue), do: Pgmq.create_queue(unquote(repo), queue)
+      @spec create_queue(Pgmq.queue(), Keyword.t()) :: :ok
+      def create_queue(queue, opts \\ []), do: Pgmq.create_queue(unquote(repo), queue, opts)
 
       @spec drop_queue(Pgmq.queue()) :: :ok
       def drop_queue(queue), do: Pgmq.drop_queue(unquote(repo), queue)
@@ -122,13 +122,26 @@ defmodule Pgmq do
   Creates a queue in the database
 
   Notice that the queue name must:
-  - have less than 63 characters
+  - have less than 48 characters
   - start with a letter
   - have only letters, numbers, and `_`
+
+  Accepts the following options:
+  - `:unlogged`: Boolean indicating if the queue should be unlogged. Unlogged
+  queues are faster to write to, but data may be lost in database crashes or
+  unclean exits.
   """
-  @spec create_queue(repo, queue) :: :ok | {:error, atom}
-  def create_queue(repo, queue) do
-    %Postgrex.Result{num_rows: 1} = repo.query!("SELECT FROM pgmq.create($1)", [queue])
+  @spec create_queue(repo, queue, opts :: Keyword.t()) :: :ok | {:error, atom}
+  def create_queue(repo, queue, opts) do
+    case Keyword.fetch(opts, :unlogged) do
+      {:ok, true} ->
+        %Postgrex.Result{num_rows: 1} =
+          repo.query!("SELECT FROM pgmq.create_unlogged($1)", [queue])
+
+      _ ->
+        %Postgrex.Result{num_rows: 1} = repo.query!("SELECT FROM pgmq.create($1)", [queue])
+    end
+
     :ok
   end
 
@@ -308,7 +321,7 @@ defmodule Pgmq do
   def list_queues(repo) do
     %Postgrex.Result{rows: queues} = repo.query!("SELECT * FROM pgmq.list_queues()", [])
 
-    Enum.map(queues, fn [queue_name, is_partitioned, is_unlogged, created_at] ->
+    Enum.map(queues, fn [queue_name, created_at, is_partitioned, is_unlogged] ->
       %{
         queue_name: queue_name,
         is_partitioned: is_partitioned,
