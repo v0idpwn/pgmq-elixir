@@ -383,6 +383,41 @@ defmodule Pgmq do
   end
 
   @doc """
+  Returns metrics for a single queue
+  """
+  @spec get_metrics(repo, queue) :: [
+          %{
+            queue_name: String.t(),
+            queue_length: pos_integer(),
+            newest_msg_age_sec: pos_integer() | nil,
+            oldest_msg_age_sec: pos_integer() | nil,
+            total_messages: pos_integer(),
+            scrape_time: DateTime.t()
+          }
+        ]
+  def get_metrics(repo, queue) do
+    %Postgrex.Result{rows: [result]} = repo.query!("SELECT * FROM pgmq.metrics($1)", [queue])
+
+    [
+      queue_name,
+      queue_length,
+      newest_msg_age_sec,
+      oldest_msg_age_sec,
+      total_messages,
+      scrape_time
+    ] = result
+
+    %{
+      queue_name: queue_name,
+      queue_length: queue_length,
+      newest_msg_age_sec: newest_msg_age_sec,
+      oldest_msg_age_sec: oldest_msg_age_sec,
+      total_messages: total_messages,
+      scrape_time: scrape_time
+    }
+  end
+
+  @doc """
   Sets the visibility timeout of a message for X seconds from now
   """
   @spec set_message_vt(repo, queue, Message.t() | integer(), visibility_timeout :: integer()) ::
