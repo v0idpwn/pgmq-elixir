@@ -129,17 +129,27 @@ defmodule Pgmq do
   Accepts the following options:
   - `:unlogged`: Boolean indicating if the queue should be unlogged. Unlogged
   queues are faster to write to, but data may be lost in database crashes or
-  unclean exits.
+  unclean exits. Can't be used together with `:partitioned`.
+  - `:partitioned`: indicates if the queue is partitioned. Defaults to `false`. Requires
+  `pg_partman` extension.
+  - `:partition_interval:` interval to partition the queue, required if `:partitioned`
+  is true.
+  - `:retention_interval:` interval for partition retention, required if `:partitioned`
+  is true.
   """
   @spec create_queue(repo, queue, opts :: Keyword.t()) :: :ok | {:error, atom}
   def create_queue(repo, queue, opts) do
-    case Keyword.fetch(opts, :unlogged) do
-      {:ok, true} ->
-        %Postgrex.Result{num_rows: 1} =
-          repo.query!("SELECT FROM pgmq.create_unlogged($1)", [queue])
-
-      _ ->
+    if Keyword.get(opts, :partitioned, false) do
+      if Keyword.get(opts, :unlogged), do: raise "Partitioned queues can't be unlogged"
+      partition_interval = Keyword.fetch!(opts, :partition_interval)
+      retention_interval = Keyword.fetch!(opts, :retention_interval)
+      repo.query!("SELECT FROM pgmq.create_partitioned($1, $2, $3)", [queue, partition_interval, retention_interval])
+    else
+      if Keyword.get(opts, :unlogged) do
+        %Postgrex.Result{num_rows: 1} = repo.query!("SELECT FROM pgmq.create_unlogged($1)", [queue])
+      else
         %Postgrex.Result{num_rows: 1} = repo.query!("SELECT FROM pgmq.create($1)", [queue])
+      end
     end
 
     :ok
@@ -150,7 +160,7 @@ defmodule Pgmq do
   """
   @spec drop_queue(repo, queue) :: :ok | {:error, atom}
   def drop_queue(repo, queue) do
-    %Postgrex.Result{num_rows: 1} = repo.query!("SELECT FROM pgmq.drop($1)", [queue])
+    %Postgrex.Result{num_rows: 1} = repo.query!("SELECT FROM pgmq.drop_queue($1)", [queue])
     :ok
   end
 
@@ -308,7 +318,7 @@ defmodule Pgmq do
   end
 
   @doc """
-  Returns a list of queue names
+  Returns a list of queues
   """
   @spec list_queues(repo) :: [
           %{
@@ -327,6 +337,34 @@ defmodule Pgmq do
         is_partitioned: is_partitioned,
         is_unlogged: is_unlogged,
         created_at: created_at
+      }
+    end)
+  end
+
+  @doc """
+  Returns a list of queue with stats
+  """
+  @spec get_metrics_all(repo) :: [
+          %{
+            queue_name: String.t(),
+            queue_length: pos_integer(),
+            newest_msg_age_sec: pos_integer() | nil,
+            oldest_msg_age_sec: pos_integer() | nil,
+            total_messages: pos_integer(),
+            scrape_time: DateTime.t()
+          }
+        ]
+  def get_metrics_all(repo) do
+    %Postgrex.Result{rows: queues} = repo.query!("SELECT * FROM pgmq.metrics_all()", [])
+
+    Enum.map(queues, fn [queue_name, queue_length, newest_msg_age_sec, oldest_msg_age_sec, total_messages, scrape_time] ->
+      %{
+        queue_name: queue_name,
+        queue_length: queue_length,
+        newest_msg_age_sec: newest_msg_age_sec,
+        oldest_msg_age_sec: oldest_msg_age_sec,
+        total_messages: total_messages,
+        scrape_time: scrape_time
       }
     end)
   end
