@@ -140,13 +140,19 @@ defmodule Pgmq do
   @spec create_queue(repo, queue, opts :: Keyword.t()) :: :ok | {:error, atom}
   def create_queue(repo, queue, opts) do
     if Keyword.get(opts, :partitioned, false) do
-      if Keyword.get(opts, :unlogged), do: raise "Partitioned queues can't be unlogged"
+      if Keyword.get(opts, :unlogged), do: raise("Partitioned queues can't be unlogged")
       partition_interval = Keyword.fetch!(opts, :partition_interval)
       retention_interval = Keyword.fetch!(opts, :retention_interval)
-      repo.query!("SELECT FROM pgmq.create_partitioned($1, $2, $3)", [queue, partition_interval, retention_interval])
+
+      repo.query!("SELECT FROM pgmq.create_partitioned($1, $2, $3)", [
+        queue,
+        partition_interval,
+        retention_interval
+      ])
     else
       if Keyword.get(opts, :unlogged) do
-        %Postgrex.Result{num_rows: 1} = repo.query!("SELECT FROM pgmq.create_unlogged($1)", [queue])
+        %Postgrex.Result{num_rows: 1} =
+          repo.query!("SELECT FROM pgmq.create_unlogged($1)", [queue])
       else
         %Postgrex.Result{num_rows: 1} = repo.query!("SELECT FROM pgmq.create($1)", [queue])
       end
@@ -342,7 +348,7 @@ defmodule Pgmq do
   end
 
   @doc """
-  Returns a list of queue with stats
+  Returns a list of queues with stats
   """
   @spec get_metrics_all(repo) :: [
           %{
@@ -357,7 +363,14 @@ defmodule Pgmq do
   def get_metrics_all(repo) do
     %Postgrex.Result{rows: queues} = repo.query!("SELECT * FROM pgmq.metrics_all()", [])
 
-    Enum.map(queues, fn [queue_name, queue_length, newest_msg_age_sec, oldest_msg_age_sec, total_messages, scrape_time] ->
+    Enum.map(queues, fn [
+                          queue_name,
+                          queue_length,
+                          newest_msg_age_sec,
+                          oldest_msg_age_sec,
+                          total_messages,
+                          scrape_time
+                        ] ->
       %{
         queue_name: queue_name,
         queue_length: queue_length,
