@@ -138,7 +138,7 @@ defmodule Pgmq do
   is true.
   """
   @spec create_queue(repo, queue, opts :: Keyword.t()) :: :ok | {:error, atom}
-  def create_queue(repo, queue, opts) do
+  def create_queue(repo, queue, opts \\ []) do
     if Keyword.get(opts, :partitioned, false) do
       if Keyword.get(opts, :unlogged), do: raise("Partitioned queues can't be unlogged")
       partition_interval = Keyword.fetch!(opts, :partition_interval)
@@ -291,7 +291,7 @@ defmodule Pgmq do
   end
 
   def archive_messages(repo, queue, message_ids) do
-    %Postgrex.Result{rows: [[true]]} =
+    %Postgrex.Result{} =
       repo.query!("SELECT * FROM pgmq.archive($1, $2::bigint[])", [queue, message_ids])
 
     :ok
@@ -317,7 +317,7 @@ defmodule Pgmq do
   end
 
   def delete_messages(repo, queue, message_ids) do
-    %Postgrex.Result{rows: [[true]]} =
+    %Postgrex.Result{} =
       repo.query!("SELECT * FROM pgmq.delete($1::text, $2::bigint[])", [queue, message_ids])
 
     :ok
