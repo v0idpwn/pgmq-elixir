@@ -66,6 +66,9 @@ defmodule PgmqTest do
 
     assert :ok = Pgmq.archive_messages(TestRepo, queue_name, [m2_full])
     assert [] = Pgmq.read_messages(TestRepo, queue_name, 0, 2)
+
+    assert Pgmq.Helpers.queue_size(TestRepo, queue_name) == 0
+    assert Pgmq.Helpers.archive_size(TestRepo, queue_name) == 2
   end
 
   test "polling" do
