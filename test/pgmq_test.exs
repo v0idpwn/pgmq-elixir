@@ -5,6 +5,14 @@ defmodule PgmqTest do
   alias Pgmq.TestRepo
   alias Pgmq.Message
 
+  test "use-macro" do
+    Code.compile_string("""
+    defmodule PgmqMacroUsage do
+      use Pgmq, repo: SomeModule
+    end
+    """)
+  end
+
   test "regular flow" do
     queue_name = "regular_flow_queue"
     assert :ok = Pgmq.create_queue(TestRepo, queue_name)

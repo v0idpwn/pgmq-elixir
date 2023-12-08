@@ -39,8 +39,8 @@ defmodule Pgmq do
       @spec drop_queue(Pgmq.queue()) :: :ok
       def drop_queue(queue), do: Pgmq.drop_queue(unquote(repo), queue)
 
-      @spec send_message(Pgmq.queue(), term()) :: {:ok, integer()} | {:error, term()}
-      def send_message(queue, message) do
+      @spec send_message(Pgmq.queue(), binary()) :: {:ok, integer()} | {:error, term()}
+      def send_message(queue, encoded_message) do
         Pgmq.send_message(unquote(repo), queue, encoded_message)
       end
 
@@ -85,7 +85,7 @@ defmodule Pgmq do
 
       @spec delete_messages(Pgmq.queue(), messages :: [Pgmq.Message.t()] | [integer()]) :: :ok
       def delete_messages(queue, messages) do
-        Pgmq.delete_messages(unquote(repo), queue, message)
+        Pgmq.delete_messages(unquote(repo), queue, messages)
       end
 
       @doc """
@@ -101,7 +101,7 @@ defmodule Pgmq do
 
       Accepts either a message or a message id.
       """
-      @spec set_message_vt(queue, Message.t() | integer()) :: :ok
+      @spec set_message_vt(Pgmq.queue(), Pgmq.Message.t() | integer(), integer()) :: :ok
       def set_message_vt(queue, message, vt) do
         Pgmq.set_message_vt(unquote(repo), queue, message, vt)
       end
@@ -111,7 +111,7 @@ defmodule Pgmq do
 
       If there are no messages in the queue, returns `nil`.
       """
-      @spec pop_message(queue) :: Message.t() | nil
+      @spec pop_message(Pgmq.queue()) :: Pgmq.Message.t() | nil
       def pop_message(queue) do
         Pgmq.pop_message(unquote(repo), queue)
       end
