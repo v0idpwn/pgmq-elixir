@@ -183,6 +183,18 @@ defmodule Pgmq do
   end
 
   @doc """
+  Sends a message batch to a queue
+  """
+  @spec send_messages(repo, queue, encoded_messages :: [binary]) ::
+          {:ok, Message.t()} | {:error, term}
+  def send_messages(repo, queue, encoded_messages) do
+    case repo.query!("SELECT * FROM pgmq.send_batch($1, $2)", [queue, encoded_messages]) do
+      %Postgrex.Result{rows: message_ids} -> {:ok, List.flatten(message_ids)}
+      result -> {:error, {:sending_error, result}}
+    end
+  end
+
+  @doc """
   Reads one message from a queue
 
   Returns immediately. If there are no messages in the queue, returns `nil`.

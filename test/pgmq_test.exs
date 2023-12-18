@@ -25,6 +25,13 @@ defmodule PgmqTest do
     assert is_nil(Pgmq.read_message(TestRepo, queue_name, 2))
 
     assert :ok = Pgmq.delete_messages(TestRepo, "regular_flow_queue", [message])
+
+    assert {:ok, message_ids} = Pgmq.send_messages(TestRepo, queue_name, ["1", "2", "3"])
+
+    assert [m1, m2, m3] = message_ids
+    assert is_integer(m1)
+    assert is_integer(m2)
+    assert is_integer(m3)
   end
 
   test "list queues" do
