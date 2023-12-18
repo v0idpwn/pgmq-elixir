@@ -46,7 +46,7 @@ defmodule Pgmq do
 
       @spec send_messages(Pgmq.queue(), [binary()]) :: {:ok, [integer()]} | {:error, term()}
       def send_messages(queue, encoded_messages) do
-        Pgmq.send_message(unquote(repo), queue, encoded_messages)
+        Pgmq.send_messages(unquote(repo), queue, encoded_messages)
       end
 
       @spec read_message(Pgmq.queue(), integer()) :: Pgmq.Message.t() | nil
