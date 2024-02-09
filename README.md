@@ -45,7 +45,7 @@ end
 ```
 
 ## Documentation
-Check [our documentation in Hexdocs](https://hexdocs.com/pgmq).
+Check [our documentation in Hexdocs](https://hexdocs.pm/pgmq).
 
 ## Usage with Broadway
 The [OffBroadwayPgmq](https://github.com/v0idpwn/off_broadway_pgmq) package
