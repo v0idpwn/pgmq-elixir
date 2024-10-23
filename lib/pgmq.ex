@@ -96,7 +96,14 @@ defmodule Pgmq do
       @doc """
       Returns a list of queue names
       """
-      @spec list_queues() :: [%{queue_name: String.t(), created_at: DateTime.t()}]
+      @spec list_queues() :: [
+              %{
+                queue_name: String.t(),
+                is_partitioned: boolean(),
+                is_unlogged: boolean(),
+                created_at: DateTime.t()
+              }
+            ]
       def list_queues() do
         Pgmq.list_queues(unquote(repo))
       end
