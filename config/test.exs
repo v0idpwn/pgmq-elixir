@@ -1,9 +1,9 @@
 import Config
 
 config :pgmq, Pgmq.TestRepo,
-  database: "pgmq_test",
-  username: "v0idpwn",
+  database: "postgres",
+  username: "postgres",
   password: "postgres",
-  port: 28815
+  port: 5432
 
 config :logger, level: :info
