@@ -352,9 +352,12 @@ defmodule Pgmq do
           }
         ]
   def list_queues(repo) do
-    %Postgrex.Result{rows: queues} = repo.query!("SELECT * FROM pgmq.list_queues()", [])
+    %Postgrex.Result{
+      columns: ["queue_name", "is_partitioned", "is_unlogged", "created_at"],
+      rows: queues
+    } = repo.query!("SELECT * FROM pgmq.list_queues()", [])
 
-    Enum.map(queues, fn [queue_name, created_at, is_partitioned, is_unlogged] ->
+    Enum.map(queues, fn [queue_name, is_partitioned, is_unlogged, created_at] ->
       %{
         queue_name: queue_name,
         is_partitioned: is_partitioned,
