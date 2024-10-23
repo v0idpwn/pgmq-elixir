@@ -1,5 +1,5 @@
 _ = Pgmq.TestRepo.__adapter__().storage_down(Pgmq.TestRepo.config())
-:ok = Pgmq.TestRepo.__adapter__().storage_up(Pgmq.TestRepo.config())
+_ = Pgmq.TestRepo.__adapter__().storage_up(Pgmq.TestRepo.config())
 Supervisor.start_link([Pgmq.TestRepo], strategy: :one_for_one)
 Pgmq.TestRepo.query!("DROP EXTENSION IF EXISTS pgmq")
 Pgmq.TestRepo.query!("CREATE EXTENSION pgmq CASCADE")
